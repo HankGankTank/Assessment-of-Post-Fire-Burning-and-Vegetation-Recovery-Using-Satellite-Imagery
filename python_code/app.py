@@ -39,6 +39,12 @@ TRANSLATIONS = {
     "zh": {
         "title": "野火遥感与生态恢复监测面板",
         "author": "**作者:** Linghan Qi | 基于 NASA FIRMS 与 Google Earth Engine",
+        "google_login_title": "Google 账号登录",
+        "google_login_help": "请先使用 Google 账号登录。登录仅用于确认访问者身份；Earth Engine 计算仍由服务器端服务账号执行。",
+        "google_login_button": "使用 Google 登录",
+        "google_logout_button": "退出 Google 登录",
+        "google_signed_in": "已登录：{user}",
+        "google_auth_not_configured": "Google 登录尚未配置。请在 Streamlit Secrets 的 [auth] 中添加 OAuth Client ID、Client Secret 和回调地址。",
         "gee_init_error": "GEE 初始化失败：{error}。在 Streamlit Cloud 中请配置 GEE_SERVICE_ACCOUNT_JSON。",
         "firms_key_dialog_title": "输入 NASA FIRMS API Key",
         "firms_key_dialog_help": "请输入 NASA FIRMS MAP_KEY。系统将依次验证 FIRMS 密钥和服务器端 Google Earth Engine 连接，两项成功后才会加载正式分析界面。",
@@ -130,6 +136,12 @@ TRANSLATIONS = {
     "en": {
         "title": "Wildfire Remote Sensing and Ecological Recovery Dashboard",
         "author": "**Author:** Linghan Qi | Powered by NASA FIRMS and Google Earth Engine",
+        "google_login_title": "Google Account Sign-In",
+        "google_login_help": "Sign in with Google first. The login identifies the visitor only; Earth Engine computations still use the server-side service account.",
+        "google_login_button": "Sign in with Google",
+        "google_logout_button": "Sign out of Google",
+        "google_signed_in": "Signed in: {user}",
+        "google_auth_not_configured": "Google sign-in is not configured. Add the OAuth Client ID, Client Secret, and callback URL under [auth] in Streamlit Secrets.",
         "gee_init_error": "GEE initialization failed: {error}. Configure GEE_SERVICE_ACCOUNT_JSON on Streamlit Cloud.",
         "firms_key_dialog_title": "Enter NASA FIRMS API Key",
         "firms_key_dialog_help": "Enter your NASA FIRMS MAP_KEY. The app will verify both the FIRMS key and its server-side Google Earth Engine connection before loading the analysis interface.",
@@ -283,6 +295,54 @@ def get_secret(name, default=""):
     except (FileNotFoundError, AttributeError):
         # 第一次本地运行可能尚未创建 secrets.toml，此时允许使用默认值。
         return default
+
+
+def require_google_login():
+    """先通过 Google OIDC 确认访问者身份，再运行 FIRMS 与 GEE 验证。"""
+    auth_config = get_secret("auth", {})
+    required_auth_fields = {
+        "redirect_uri",
+        "cookie_secret",
+        "client_id",
+        "client_secret",
+        "server_metadata_url"
+    }
+
+    # 主动检查配置，避免用户点击登录按钮后才看到难以理解的底层异常。
+    if not auth_config or not all(
+        auth_config.get(field) for field in required_auth_fields
+    ):
+        st.error(tr("google_auth_not_configured"))
+        st.stop()
+
+    if not st.user.is_logged_in:
+        st.subheader(tr("google_login_title"))
+        st.info(tr("google_login_help"))
+        if st.button(
+            tr("google_login_button"),
+            type="primary",
+            key="google_login_button"
+        ):
+            st.login()
+        st.stop()
+
+    # 这里只显示姓名或邮箱，不显示 ID token、access token 等敏感内容。
+    user_info = st.user.to_dict()
+    user_label = (
+        user_info.get("email")
+        or user_info.get("name")
+        or "Google user"
+    )
+    st.sidebar.success(tr("google_signed_in", user=user_label))
+    if st.sidebar.button(
+        tr("google_logout_button"),
+        key="google_logout_button"
+    ):
+        st.logout()
+
+
+# 身份验证必须早于 FIRMS 弹窗与 GEE 初始化。未登录时 st.stop() 会停止后续代码。
+require_google_login()
 
 
 gee_project_id = get_secret("GEE_PROJECT_ID", "final-research-lq-gis")
