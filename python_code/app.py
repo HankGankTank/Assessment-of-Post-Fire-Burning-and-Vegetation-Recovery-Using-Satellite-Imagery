@@ -2,12 +2,15 @@ import streamlit as st
 import pandas as pd
 import requests
 import io
+import json
+import hmac
 import time
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
 import folium
 from streamlit_folium import st_folium
+from google.oauth2 import service_account
 
 # 必须使用 foliumap 才能在 Streamlit 中完美渲染
 import ee
@@ -37,7 +40,14 @@ TRANSLATIONS = {
     "zh": {
         "title": "野火遥感与生态恢复监测面板",
         "author": "**作者:** Linghan Qi | 基于 NASA FIRMS 与 Google Earth Engine",
-        "gee_init_error": "GEE 初始化失败，请检查授权：{error}",
+        "gee_init_error": "GEE 初始化失败：{error}。在 Streamlit Cloud 中请配置 GEE_SERVICE_ACCOUNT_JSON。",
+        "access_title": "访问验证",
+        "access_help": "请输入网站访问密钥。验证通过后才会加载地图和数据分析功能。",
+        "access_key_label": "网站访问密钥",
+        "unlock": "验证并进入",
+        "invalid_access_key": "访问密钥不正确，请重试。",
+        "access_not_configured": "网站尚未配置 APP_ACCESS_KEY。请先在 Streamlit Secrets 中添加该密钥。",
+        "logout": "退出访问",
         "settings": "参数配置",
         "map_key": "NASA FIRMS MAP_KEY",
         "bbox": "研究区域 (BBOX)",
@@ -115,7 +125,14 @@ TRANSLATIONS = {
     "en": {
         "title": "Wildfire Remote Sensing and Ecological Recovery Dashboard",
         "author": "**Author:** Linghan Qi | Powered by NASA FIRMS and Google Earth Engine",
-        "gee_init_error": "GEE initialization failed. Please check authorization: {error}",
+        "gee_init_error": "GEE initialization failed: {error}. Configure GEE_SERVICE_ACCOUNT_JSON on Streamlit Cloud.",
+        "access_title": "Access Verification",
+        "access_help": "Enter the website access key. Mapping and data analysis will load only after verification.",
+        "access_key_label": "Website Access Key",
+        "unlock": "Verify and Continue",
+        "invalid_access_key": "The access key is incorrect. Please try again.",
+        "access_not_configured": "APP_ACCESS_KEY is not configured. Add it to Streamlit Secrets before using the app.",
+        "logout": "Log Out",
         "settings": "Settings",
         "map_key": "NASA FIRMS MAP_KEY",
         "bbox": "Study Area (BBOX)",
@@ -257,22 +274,84 @@ def get_secret(name, default=""):
         return default
 
 
+def require_app_access():
+    """在运行 GEE 或显示分析控件之前验证独立的网站访问密钥。"""
+    # APP_ACCESS_KEY 只负责控制网页访问，不能复用 Google Cloud、GEE 或
+    # NASA FIRMS 的 API 密钥。请仅在 Streamlit Secrets 中保存它。
+    expected_key = str(get_secret("APP_ACCESS_KEY", ""))
+
+    if not expected_key:
+        # 默认采用“关闭访问”策略，避免忘记配置密钥时意外公开分析页面。
+        st.error(tr("access_not_configured"))
+        st.stop()
+
+    # 验证结果只保存在当前 Streamlit 会话中；刷新或新建会话可能需要重新验证。
+    if st.session_state.get("app_authenticated", False):
+        if st.sidebar.button(tr("logout"), key="logout_button"):
+            st.session_state["app_authenticated"] = False
+            st.rerun()
+        return
+
+    st.subheader(tr("access_title"))
+    st.info(tr("access_help"))
+
+    # 使用 form，避免用户每输入一个字符就重新运行整个 Streamlit 脚本。
+    with st.form("access_form", clear_on_submit=True):
+        entered_key = st.text_input(
+            tr("access_key_label"),
+            type="password",
+            key="access_key_input"
+        )
+        submitted = st.form_submit_button(tr("unlock"))
+
+    if submitted:
+        # compare_digest 避免普通字符串比较产生可测量的逐字符时间差。
+        if hmac.compare_digest(entered_key, expected_key):
+            st.session_state["app_authenticated"] = True
+            st.rerun()
+        else:
+            st.error(tr("invalid_access_key"))
+
+    # 未验证时在此停止：下面的 GEE 初始化、侧边栏参数、地图和数据都不会运行。
+    st.stop()
+
+
+require_app_access()
+
+
 gee_project_id = get_secret("GEE_PROJECT_ID", "final-research-lq-gis")
+gee_service_account_json = get_secret("GEE_SERVICE_ACCOUNT_JSON", "")
 
 
 @st.cache_resource
-def init_gee(project_id, language_code):
-    """初始化一次 Earth Engine，并在 Streamlit 重运行时复用连接。"""
+def init_gee(project_id, language_code, service_account_json):
+    """本地使用已保存凭据，云端使用 Streamlit Secret 中的服务账号。"""
     try:
-        # ee.Initialize 不会弹出浏览器授权窗口；运行应用前应先完成认证，
-        # 或在部署环境中配置服务账号凭据。
-        ee.Initialize(project=project_id)
+        if service_account_json:
+            # Streamlit Secrets 保存完整服务账号 JSON。这里只在内存中解析，
+            # 不会把私钥写入文件系统或 GitHub 仓库。
+            service_account_info = json.loads(service_account_json)
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info,
+                scopes=[
+                    "https://www.googleapis.com/auth/earthengine",
+                    "https://www.googleapis.com/auth/cloud-platform"
+                ]
+            )
+            ee.Initialize(credentials=credentials, project=project_id)
+        else:
+            # 本地开发继续复用 earthengine authenticate 保存的用户凭据。
+            ee.Initialize(project=project_id)
         return True
     except Exception as e:
         st.error(tr_for(language_code, "gee_init_error", error=e))
         return False
 
-gee_ready = init_gee(gee_project_id, lang)
+gee_ready = init_gee(
+    gee_project_id,
+    lang,
+    gee_service_account_json
+)
 
 # ==========================================
 # 2. 侧边栏：全局参数配置
