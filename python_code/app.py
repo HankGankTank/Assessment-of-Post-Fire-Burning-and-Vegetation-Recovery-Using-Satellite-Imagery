@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import io
 import json
-import hmac
 import time
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
@@ -41,13 +40,19 @@ TRANSLATIONS = {
         "title": "野火遥感与生态恢复监测面板",
         "author": "**作者:** Linghan Qi | 基于 NASA FIRMS 与 Google Earth Engine",
         "gee_init_error": "GEE 初始化失败：{error}。在 Streamlit Cloud 中请配置 GEE_SERVICE_ACCOUNT_JSON。",
-        "access_title": "访问验证",
-        "access_help": "请输入网站访问密钥。验证通过后才会加载地图和数据分析功能。",
-        "access_key_label": "网站访问密钥",
-        "unlock": "验证并进入",
-        "invalid_access_key": "访问密钥不正确，请重试。",
-        "access_not_configured": "网站尚未配置 APP_ACCESS_KEY。请先在 Streamlit Secrets 中添加该密钥。",
-        "logout": "退出访问",
+        "firms_key_dialog_title": "输入 NASA FIRMS API Key",
+        "firms_key_dialog_help": "请输入 NASA FIRMS MAP_KEY。系统将依次验证 FIRMS 密钥和服务器端 Google Earth Engine 连接，两项成功后才会加载正式分析界面。",
+        "firms_key_label": "NASA FIRMS MAP_KEY",
+        "validate_key": "验证并进入",
+        "validating_key": "正在向 NASA FIRMS 验证 MAP_KEY...",
+        "firms_key_empty": "请输入 MAP_KEY。",
+        "firms_key_invalid": "MAP_KEY 无效，或 NASA 返回了无法识别的验证结果。请检查后重试。",
+        "firms_key_network_error": "暂时无法连接 NASA FIRMS 验证服务：{error}",
+        "firms_key_verified": "NASA FIRMS MAP_KEY 已验证",
+        "validating_gee": "正在验证 Google Earth Engine 连接...",
+        "gee_verified": "Google Earth Engine 已验证",
+        "validation_sequence": "验证顺序：① NASA FIRMS MAP_KEY　② Google Earth Engine 服务账号",
+        "change_api_key": "更换 API Key",
         "settings": "参数配置",
         "map_key": "NASA FIRMS MAP_KEY",
         "bbox": "研究区域 (BBOX)",
@@ -126,13 +131,19 @@ TRANSLATIONS = {
         "title": "Wildfire Remote Sensing and Ecological Recovery Dashboard",
         "author": "**Author:** Linghan Qi | Powered by NASA FIRMS and Google Earth Engine",
         "gee_init_error": "GEE initialization failed: {error}. Configure GEE_SERVICE_ACCOUNT_JSON on Streamlit Cloud.",
-        "access_title": "Access Verification",
-        "access_help": "Enter the website access key. Mapping and data analysis will load only after verification.",
-        "access_key_label": "Website Access Key",
-        "unlock": "Verify and Continue",
-        "invalid_access_key": "The access key is incorrect. Please try again.",
-        "access_not_configured": "APP_ACCESS_KEY is not configured. Add it to Streamlit Secrets before using the app.",
-        "logout": "Log Out",
+        "firms_key_dialog_title": "Enter NASA FIRMS API Key",
+        "firms_key_dialog_help": "Enter your NASA FIRMS MAP_KEY. The app will verify both the FIRMS key and its server-side Google Earth Engine connection before loading the analysis interface.",
+        "firms_key_label": "NASA FIRMS MAP_KEY",
+        "validate_key": "Verify and Continue",
+        "validating_key": "Verifying the MAP_KEY with NASA FIRMS...",
+        "firms_key_empty": "Enter a MAP_KEY.",
+        "firms_key_invalid": "The MAP_KEY is invalid, or NASA returned an unrecognized validation result. Check the key and try again.",
+        "firms_key_network_error": "The NASA FIRMS validation service is temporarily unavailable: {error}",
+        "firms_key_verified": "NASA FIRMS MAP_KEY verified",
+        "validating_gee": "Verifying the Google Earth Engine connection...",
+        "gee_verified": "Google Earth Engine verified",
+        "validation_sequence": "Verification order: ① NASA FIRMS MAP_KEY  ② Google Earth Engine service account",
+        "change_api_key": "Change API Key",
         "settings": "Settings",
         "map_key": "NASA FIRMS MAP_KEY",
         "bbox": "Study Area (BBOX)",
@@ -274,96 +285,136 @@ def get_secret(name, default=""):
         return default
 
 
-def require_app_access():
-    """在运行 GEE 或显示分析控件之前验证独立的网站访问密钥。"""
-    # APP_ACCESS_KEY 只负责控制网页访问，不能复用 Google Cloud、GEE 或
-    # NASA FIRMS 的 API 密钥。请仅在 Streamlit Secrets 中保存它。
-    expected_key = str(get_secret("APP_ACCESS_KEY", ""))
-
-    if not expected_key:
-        # 默认采用“关闭访问”策略，避免忘记配置密钥时意外公开分析页面。
-        st.error(tr("access_not_configured"))
-        st.stop()
-
-    # 验证结果只保存在当前 Streamlit 会话中；刷新或新建会话可能需要重新验证。
-    if st.session_state.get("app_authenticated", False):
-        if st.sidebar.button(tr("logout"), key="logout_button"):
-            st.session_state["app_authenticated"] = False
-            st.rerun()
-        return
-
-    st.subheader(tr("access_title"))
-    st.info(tr("access_help"))
-
-    # 使用 form，避免用户每输入一个字符就重新运行整个 Streamlit 脚本。
-    with st.form("access_form", clear_on_submit=True):
-        entered_key = st.text_input(
-            tr("access_key_label"),
-            type="password",
-            key="access_key_input"
-        )
-        submitted = st.form_submit_button(tr("unlock"))
-
-    if submitted:
-        # compare_digest 避免普通字符串比较产生可测量的逐字符时间差。
-        if hmac.compare_digest(entered_key, expected_key):
-            st.session_state["app_authenticated"] = True
-            st.rerun()
-        else:
-            st.error(tr("invalid_access_key"))
-
-    # 未验证时在此停止：下面的 GEE 初始化、侧边栏参数、地图和数据都不会运行。
-    st.stop()
-
-
-require_app_access()
-
-
 gee_project_id = get_secret("GEE_PROJECT_ID", "final-research-lq-gis")
 gee_service_account_json = get_secret("GEE_SERVICE_ACCOUNT_JSON", "")
 
 
 @st.cache_resource
-def init_gee(project_id, language_code, service_account_json):
-    """本地使用已保存凭据，云端使用 Streamlit Secret 中的服务账号。"""
-    try:
-        if service_account_json:
-            # Streamlit Secrets 保存完整服务账号 JSON。这里只在内存中解析，
-            # 不会把私钥写入文件系统或 GitHub 仓库。
-            service_account_info = json.loads(service_account_json)
-            credentials = service_account.Credentials.from_service_account_info(
-                service_account_info,
-                scopes=[
-                    "https://www.googleapis.com/auth/earthengine",
-                    "https://www.googleapis.com/auth/cloud-platform"
-                ]
-            )
-            ee.Initialize(credentials=credentials, project=project_id)
-        else:
-            # 本地开发继续复用 earthengine authenticate 保存的用户凭据。
-            ee.Initialize(project=project_id)
-        return True
-    except Exception as e:
-        st.error(tr_for(language_code, "gee_init_error", error=e))
-        return False
+def initialize_and_validate_gee(project_id, service_account_json):
+    """初始化 GEE，并执行一次最小请求来确认凭据确实可用。"""
+    if service_account_json:
+        # Streamlit Cloud 使用 Secrets 中的完整服务账号 JSON。私钥只在内存中
+        # 解析，不会写入网页、日志、下载文件或 GitHub 仓库。
+        service_account_info = json.loads(service_account_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=[
+                "https://www.googleapis.com/auth/earthengine",
+                "https://www.googleapis.com/auth/cloud-platform"
+            ]
+        )
+        ee.Initialize(credentials=credentials, project=project_id)
+    else:
+        # 本地开发环境仍可使用 earthengine authenticate 保存的用户凭据。
+        ee.Initialize(project=project_id)
 
-gee_ready = init_gee(
-    gee_project_id,
-    lang,
-    gee_service_account_json
-)
+    # ee.Initialize() 主要完成客户端配置；getInfo() 会真正访问 Earth Engine，
+    # 因此还能检测项目未注册、API 未启用或服务账号无权限等问题。
+    if ee.Number(1).getInfo() != 1:
+        raise RuntimeError("Earth Engine returned an unexpected validation result.")
+
+    return True
+
+
+def validate_firms_map_key(map_key):
+    """调用 NASA FIRMS 官方状态接口，确认用户输入的 MAP_KEY 是否有效。"""
+    try:
+        response = requests.get(
+            "https://firms.modaps.eosdis.nasa.gov/mapserver/mapkey_status/",
+            params={"MAP_KEY": map_key},
+            timeout=15
+        )
+        response.raise_for_status()
+        status_data = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        return False, tr("firms_key_network_error", error=exc)
+
+    # 有效响应应包含 NASA 公布的交易额度和当前交易次数。
+    required_fields = {"transaction_limit", "current_transactions"}
+    if isinstance(status_data, dict) and required_fields.issubset(status_data):
+        return True, ""
+
+    return False, tr("firms_key_invalid")
+
+
+@st.dialog(tr("firms_key_dialog_title"), dismissible=False)
+def show_firms_key_dialog():
+    """首次打开网页时显示不可关闭的 MAP_KEY 验证窗口。"""
+    st.info(tr("firms_key_dialog_help"))
+    st.caption(tr("validation_sequence"))
+
+    with st.form("firms_key_form", clear_on_submit=False):
+        entered_key = st.text_input(
+            tr("firms_key_label"),
+            type="password",
+            key="firms_key_dialog_input"
+        )
+        submitted = st.form_submit_button(tr("validate_key"))
+
+    if not submitted:
+        return
+
+    cleaned_key = entered_key.strip()
+    if not cleaned_key:
+        st.error(tr("firms_key_empty"))
+        return
+
+    with st.spinner(tr("validating_key")):
+        is_valid, error_message = validate_firms_map_key(cleaned_key)
+
+    if not is_valid:
+        st.error(error_message)
+        return
+
+    # FIRMS 验证成功后，再真实请求一次 GEE。任何一项失败都不会进入主界面。
+    try:
+        with st.spinner(tr("validating_gee")):
+            initialize_and_validate_gee(
+                gee_project_id,
+                gee_service_account_json
+            )
+    except Exception as exc:
+        st.error(tr("gee_init_error", error=exc))
+        return
+
+    # FIRMS 密钥只保存在当前浏览器会话中，不写入源码、日志或下载文件。
+    st.session_state["firms_map_key"] = cleaned_key
+    st.session_state["firms_key_verified"] = True
+    st.session_state["gee_verified"] = True
+    st.rerun()
+
+
+def require_firms_map_key():
+    """验证通过前阻止 GEE 初始化以及正式地图和数据界面运行。"""
+    if (
+        st.session_state.get("firms_key_verified", False)
+        and st.session_state.get("gee_verified", False)
+        and st.session_state.get("firms_map_key")
+    ):
+        st.sidebar.success(tr("firms_key_verified"))
+        st.sidebar.success(tr("gee_verified"))
+        if st.sidebar.button(tr("change_api_key"), key="change_firms_key"):
+            st.session_state.pop("firms_map_key", None)
+            st.session_state.pop("firms_key_verified", None)
+            st.session_state.pop("gee_verified", None)
+            st.session_state.pop("firms_key_dialog_input", None)
+            st.rerun()
+        return st.session_state["firms_map_key"]
+
+    show_firms_key_dialog()
+    # 即使弹窗被浏览器行为隐藏，也不允许执行后面的 GEE 和分析代码。
+    st.stop()
+
+
+map_key = require_firms_map_key()
+
+# 只有弹窗中的 FIRMS 与 GEE 双重验证都成功，程序才会运行到这里。
+gee_ready = st.session_state.get("gee_verified", False)
 
 # ==========================================
 # 2. 侧边栏：全局参数配置
 # ==========================================
 st.sidebar.header(tr("settings"))
-map_key = st.sidebar.text_input(
-    tr("map_key"),
-    value=get_secret("FIRMS_MAP_KEY", ""),
-    # password 只隐藏界面显示，不等于安全存储；真正的密钥放在 st.secrets 中。
-    type="password",
-    key="firms_map_key"
-)
 # BBOX 顺序固定为：最西经度、最南纬度、最东经度、最北纬度。
 bbox_input = st.sidebar.text_input(
     tr("bbox"),
