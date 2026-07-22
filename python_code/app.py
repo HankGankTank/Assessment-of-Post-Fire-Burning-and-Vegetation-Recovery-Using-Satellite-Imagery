@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import io
 import json
+import base64
 import time
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
@@ -46,6 +47,9 @@ TRANSLATIONS = {
         "google_signed_in": "已登录：{user}",
         "google_auth_not_configured": "Google 登录尚未配置。请在 Streamlit Secrets 的 [auth] 中添加 OAuth Client ID、Client Secret 和回调地址。",
         "gee_init_error": "GEE 初始化失败：{error}。在 Streamlit Cloud 中请配置 GEE_SERVICE_ACCOUNT_JSON。",
+        "gee_secret_json_invalid": "GEE_SERVICE_ACCOUNT_JSON 不是有效 JSON（第 {line} 行，第 {column} 列）。请从下载的 JSON 文件完整复制。",
+        "gee_secret_missing_fields": "GEE 服务账号 JSON 缺少必要字段：{fields}。",
+        "gee_private_key_invalid": "GEE 服务账号 private_key 格式无效。请重新下载 JSON 密钥并完整复制，不要手动删改内容；JSON 中的换行应写成单个反斜杠加 n。",
         "firms_key_dialog_title": "输入 NASA FIRMS API Key",
         "firms_key_dialog_help": "请输入 NASA FIRMS MAP_KEY。系统将依次验证 FIRMS 密钥和服务器端 Google Earth Engine 连接，两项成功后才会加载正式分析界面。",
         "firms_key_label": "NASA FIRMS MAP_KEY",
@@ -143,6 +147,9 @@ TRANSLATIONS = {
         "google_signed_in": "Signed in: {user}",
         "google_auth_not_configured": "Google sign-in is not configured. Add the OAuth Client ID, Client Secret, and callback URL under [auth] in Streamlit Secrets.",
         "gee_init_error": "GEE initialization failed: {error}. Configure GEE_SERVICE_ACCOUNT_JSON on Streamlit Cloud.",
+        "gee_secret_json_invalid": "GEE_SERVICE_ACCOUNT_JSON is not valid JSON (line {line}, column {column}). Copy the complete downloaded JSON file.",
+        "gee_secret_missing_fields": "The GEE service-account JSON is missing required fields: {fields}.",
+        "gee_private_key_invalid": "The GEE service-account private_key is invalid. Download a new JSON key and copy it completely without editing it; JSON newlines must use one backslash followed by n.",
         "firms_key_dialog_title": "Enter NASA FIRMS API Key",
         "firms_key_dialog_help": "Enter your NASA FIRMS MAP_KEY. The app will verify both the FIRMS key and its server-side Google Earth Engine connection before loading the analysis interface.",
         "firms_key_label": "NASA FIRMS MAP_KEY",
@@ -350,19 +357,86 @@ gee_service_account_json = get_secret("GEE_SERVICE_ACCOUNT_JSON", "")
 
 
 @st.cache_resource
-def initialize_and_validate_gee(project_id, service_account_json):
+def initialize_and_validate_gee(project_id, service_account_json, language_code):
     """初始化 GEE，并执行一次最小请求来确认凭据确实可用。"""
     if service_account_json:
         # Streamlit Cloud 使用 Secrets 中的完整服务账号 JSON。私钥只在内存中
         # 解析，不会写入网页、日志、下载文件或 GitHub 仓库。
-        service_account_info = json.loads(service_account_json)
-        credentials = service_account.Credentials.from_service_account_info(
-            service_account_info,
-            scopes=[
-                "https://www.googleapis.com/auth/earthengine",
-                "https://www.googleapis.com/auth/cloud-platform"
-            ]
+        if isinstance(service_account_json, str):
+            try:
+                service_account_info = json.loads(service_account_json)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    tr_for(
+                        language_code,
+                        "gee_secret_json_invalid",
+                        line=exc.lineno,
+                        column=exc.colno
+                    )
+                ) from exc
+        elif hasattr(service_account_json, "to_dict"):
+            # 同时兼容把服务账号配置为 Streamlit Secrets 子表的写法。
+            service_account_info = service_account_json.to_dict()
+        else:
+            service_account_info = dict(service_account_json)
+
+        required_fields = {"client_email", "private_key", "token_uri"}
+        missing_fields = sorted(required_fields - set(service_account_info))
+        if missing_fields:
+            raise ValueError(
+                tr_for(
+                    language_code,
+                    "gee_secret_missing_fields",
+                    fields=", ".join(missing_fields)
+                )
+            )
+
+        # 如果 JSON 被某些编辑器或 TOML 写法重复转义，json.loads() 后可能仍然
+        # 留下字面量 \n。先将它恢复为真正换行，再重新构造标准 PEM 排版。
+        private_key = str(service_account_info["private_key"])
+        private_key = private_key.replace("\\r\\n", "\n").replace("\\n", "\n")
+        private_key = private_key.replace("\r\n", "\n").strip()
+
+        pem_header = "-----BEGIN PRIVATE KEY-----"
+        pem_footer = "-----END PRIVATE KEY-----"
+        if not (
+            private_key.startswith(pem_header)
+            and private_key.endswith(pem_footer)
+        ):
+            raise ValueError(tr_for(language_code, "gee_private_key_invalid"))
+
+        # PEM 中间部分是 Base64。去掉复制时引入的空白后验证，并按 64 字符换行，
+        # 既能修复重复转义，也能识别被截断或粘贴不完整的密钥。
+        pem_body = private_key[len(pem_header):-len(pem_footer)]
+        pem_body = "".join(pem_body.split())
+        try:
+            base64.b64decode(pem_body, validate=True)
+        except (ValueError, base64.binascii.Error) as exc:
+            raise ValueError(
+                tr_for(language_code, "gee_private_key_invalid")
+            ) from exc
+
+        wrapped_body = "\n".join(
+            pem_body[index:index + 64]
+            for index in range(0, len(pem_body), 64)
         )
+        service_account_info["private_key"] = (
+            f"{pem_header}\n{wrapped_body}\n{pem_footer}\n"
+        )
+
+        try:
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info,
+                scopes=[
+                    "https://www.googleapis.com/auth/earthengine",
+                    "https://www.googleapis.com/auth/cloud-platform"
+                ]
+            )
+        except ValueError as exc:
+            raise ValueError(
+                tr_for(language_code, "gee_private_key_invalid")
+            ) from exc
+
         ee.Initialize(credentials=credentials, project=project_id)
     else:
         # 本地开发环境仍可使用 earthengine authenticate 保存的用户凭据。
@@ -431,7 +505,8 @@ def show_firms_key_dialog():
         with st.spinner(tr("validating_gee")):
             initialize_and_validate_gee(
                 gee_project_id,
-                gee_service_account_json
+                gee_service_account_json,
+                lang
             )
     except Exception as exc:
         st.error(tr("gee_init_error", error=exc))
