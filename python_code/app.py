@@ -88,7 +88,6 @@ TRANSLATIONS = {
         "baseline_count": "Sentinel-2 基线影像：火前 {pre} 景，火后 {post} 景",
         "dnbr_subheader": "烧伤区域逐月 dNBR 变化（1-12 个月）",
         "dnbr_caption": "固定火前基线：{start} 至 {end}；每个火后图层为连续 30 天中值影像与该基线的差值。",
-        "water_mask": "应用水体掩膜 (JRC)",
         "burned_only": "仅显示火烧迹地 (dNBR > 0.1)",
         "map_mode": "地图生成模式",
         "fast_single_month": "单月快速模式（推荐）",
@@ -191,7 +190,6 @@ TRANSLATIONS = {
         "baseline_count": "Sentinel-2 baseline imagery: {pre} pre-fire scenes and {post} post-fire scenes",
         "dnbr_subheader": "Monthly dNBR Change Within the Burned Area (Months 1-12)",
         "dnbr_caption": "Fixed pre-fire baseline: {start} to {end}. Each post-fire layer compares a 30-day median composite with this baseline.",
-        "water_mask": "Apply Water Mask (JRC)",
         "burned_only": "Show Burned Area Only (dNBR > 0.1)",
         "map_mode": "Map Generation Mode",
         "fast_single_month": "Fast Single-Month Mode (Recommended)",
@@ -708,19 +706,20 @@ if gee_ready:
         return image.normalizedDifference(['B8', 'B4']).rename('NDVI')
 
     def mask_s2_clouds(image):
-        """移除 Sentinel-2 SCL 中的无效、云影、云、卷云和冰雪像元。"""
+        """移除 Sentinel-2 SCL 中的无效、云、水体、卷云和冰雪像元。"""
         # SCL（Scene Classification Layer）是 Sentinel-2 L2A 自带的
         # 像元分类波段。它比只看整景云量更精细，可以逐像元去云。
         scl = image.select('SCL')
 
         # 需要屏蔽的 SCL 类别：
-        # 0=无数据，1=饱和/坏像元，3=云影，7=低概率云/未分类，
+        # 0=无数据，1=饱和/坏像元，3=云影，6=水体，7=低概率云/未分类，
         # 8=中概率云，9=高概率云，10=卷云，11=雪/冰。
-        # 类别 2（暗像元）、4（植被）、5（裸地）、6（水体）暂时保留；
-        # 水体会在后面用 JRC 数据进行更稳定的专门掩膜。
+        # SCL=6 在每景影像合成前就移除，可覆盖 JRC 固定水体图层未及时
+        # 记录的季节性水面、小河道以及火灾前后的水位变化。
         invalid = (scl.eq(0)
             .Or(scl.eq(1))
             .Or(scl.eq(3))
+            .Or(scl.eq(6))
             .Or(scl.eq(7))
             .Or(scl.eq(8))
             .Or(scl.eq(9))
@@ -805,9 +804,15 @@ if gee_ready:
         post_fire_img.select('NBR')
     ).rename('dNBR')
     
-    # JRC max_extent=0 表示该像元未被记录为历史水体。所有合成影像已经裁剪
-    # 到 roi，因此无需再把全球国家边界 FeatureCollection 加入每个地图表达式。
-    inland_water_mask = ee.Image("JRC/GSW1_4/GlobalSurfaceWater").select('max_extent').eq(0)
+    # JRC max_extent=0 表示该像元从未被记录为历史水体。unmask(1) 把 JRC
+    # 无数据区（包括海洋背景）视作水体而不是陆地，避免沿海区域漏掩膜。
+    # focal_min 会把水体边界向陆地方向扩张约 30 m，用于清除分辨率差异、
+    # 岸线移动和重采样造成的水岸彩色边缘；SCL=6 则作为逐景动态水体掩膜。
+    inland_water_mask = (ee.Image("JRC/GSW1_4/GlobalSurfaceWater")
+        .select('max_extent')
+        .unmask(1)
+        .eq(0)
+        .focalMin(radius=30, units='meters'))
     
     def classify_dnbr(dnbr_image):
         """按照 USGS/FIREMON 阈值将连续 dNBR 重分类为 1-7 级。"""
@@ -874,20 +879,16 @@ if gee_ready:
             key="dnbr_map_mode"
         )
 
-        # 交互开关控制（前端 UI 控制后台逻辑）
-        col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1, 1, 1])
-        use_water_mask = col_ctrl1.checkbox(
-            tr("water_mask"),
-            value=True,
-            key="use_water_mask"
-        )
-        show_burned_only = col_ctrl2.checkbox(
+        # 水体掩膜现在是强制规则，不再由旧 session_state 中的开关状态控制。
+        # 这样无论用户是否曾取消勾选，水面都不会进入 dNBR 图层。
+        col_ctrl1, col_ctrl2 = st.columns([1, 1])
+        show_burned_only = col_ctrl1.checkbox(
             tr("burned_only"),
             value=True,
             key="show_burned_only"
         )
         if dnbr_mode == "single":
-            selected_dnbr_month = col_ctrl3.slider(
+            selected_dnbr_month = col_ctrl2.slider(
                 tr("display_month"),
                 1,
                 12,
@@ -900,7 +901,7 @@ if gee_ready:
                 month=selected_dnbr_month
             )
         else:
-            months_to_track = col_ctrl3.slider(
+            months_to_track = col_ctrl2.slider(
                 tr("months_track"),
                 1,
                 12,
@@ -929,8 +930,7 @@ if gee_ready:
                 # 火烧迹地范围固定取自火后第一个 30 天窗口。后续月份即使
                 # dNBR 下降为灰色或绿色，也仍在同一受灾范围内显示，便于比较恢复。
                 fixed_burned_mask = dnbr_land.gt(0.1)
-                if use_water_mask:
-                    fixed_burned_mask = fixed_burned_mask.updateMask(inland_water_mask)
+                fixed_burned_mask = fixed_burned_mask.updateMask(inland_water_mask)
 
                 loaded_dnbr_layers = 0
                 for i in dnbr_month_indices:
@@ -960,8 +960,8 @@ if gee_ready:
                         .rename('dNBR'))
                     monthly_dnbr = monthly_dnbr.clip(roi)
 
-                    if use_water_mask:
-                        monthly_dnbr = monthly_dnbr.updateMask(inland_water_mask)
+                    # 水体在这里再次强制排除，作为 SCL 逐景掩膜之外的保险。
+                    monthly_dnbr = monthly_dnbr.updateMask(inland_water_mask)
                     if show_burned_only:
                         # 固定空间范围，而不是每个月重新用 dNBR>0.1 筛选；
                         # 否则已经恢复的绿色像元会从地图中消失，无法观察恢复过程。
@@ -1007,7 +1007,7 @@ if gee_ready:
                         key=(
                             f"monthly_dnbr_map_{dnbr_mode}_"
                             f"{list(dnbr_month_indices)[-1] + 1}_"
-                            f"{use_water_mask}_{show_burned_only}"
+                            f"water_masked_{show_burned_only}"
                         )
                     )
                 else:
