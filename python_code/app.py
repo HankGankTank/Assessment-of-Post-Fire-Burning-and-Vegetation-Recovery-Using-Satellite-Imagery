@@ -40,16 +40,11 @@ TRANSLATIONS = {
     "zh": {
         "title": "野火遥感与生态恢复监测面板",
         "author": "**作者:** Linghan Qi | 基于 NASA FIRMS 与 Google Earth Engine",
-        "google_login_title": "Google 账号登录",
-        "google_login_help": "请先使用 Google 账号登录。登录仅用于确认访问者身份；Earth Engine 计算仍由服务器端服务账号执行。",
-        "google_login_button": "使用 Google 登录",
-        "google_logout_button": "退出 Google 登录",
-        "google_signed_in": "已登录：{user}",
-        "google_auth_not_configured": "Google 登录尚未配置。请在 Streamlit Secrets 的 [auth] 中添加 OAuth Client ID、Client Secret 和回调地址。",
         "gee_init_error": "GEE 初始化失败：{error}。在 Streamlit Cloud 中请配置 GEE_SERVICE_ACCOUNT_JSON。",
         "gee_secret_json_invalid": "GEE_SERVICE_ACCOUNT_JSON 不是有效 JSON（第 {line} 行，第 {column} 列）。请从下载的 JSON 文件完整复制。",
         "gee_secret_missing_fields": "GEE 服务账号 JSON 缺少必要字段：{fields}。",
         "gee_private_key_invalid": "GEE 服务账号 private_key 格式无效。请重新下载 JSON 密钥并完整复制，不要手动删改内容；JSON 中的换行应写成单个反斜杠加 n。",
+        "gee_map_validation_failed": "GEE 基础计算已通过，但没有成功创建地图瓦片：{error}",
         "firms_key_dialog_title": "输入 NASA FIRMS API Key",
         "firms_key_dialog_help": "请输入 NASA FIRMS MAP_KEY。系统将依次验证 FIRMS 密钥和服务器端 Google Earth Engine 连接，两项成功后才会加载正式分析界面。",
         "firms_key_label": "NASA FIRMS MAP_KEY",
@@ -95,10 +90,16 @@ TRANSLATIONS = {
         "dnbr_caption": "固定火前基线：{start} 至 {end}；每个火后图层为连续 30 天中值影像与该基线的差值。",
         "water_mask": "应用水体掩膜 (JRC)",
         "burned_only": "仅显示火烧迹地 (dNBR > 0.1)",
+        "map_mode": "地图生成模式",
+        "fast_single_month": "单月快速模式（推荐）",
+        "multi_month_mode": "多月对比模式（较慢）",
+        "display_month": "显示火后月份",
         "months_track": "火后跟踪月数",
         "generate_dnbr": "生成逐月 dNBR 地图",
         "generating_dnbr": "正在从 GEE 生成 {count} 个逐月 dNBR 图层...",
+        "generating_dnbr_single": "正在从 GEE 生成火后第 {month} 月 dNBR 图层...",
         "month_no_image": "火后第 {month} 月没有满足条件的 Sentinel-2 影像，已跳过。",
+        "map_layer_error": "图层“{layer}”加载失败：{error}",
         "dnbr_layer": "火后第 {month} 月 dNBR ({start} ~ {end})",
         "dnbr_no_layers": "所选时间范围内没有可用于绘制逐月 dNBR 的影像。",
         "dnbr_legend": "#### dNBR 严重度 / 恢复图例",
@@ -114,6 +115,7 @@ TRANSLATIONS = {
         "ndvi_map_subheader": "过火区域植被恢复空间演变（1-12 个月）",
         "generate_ndvi_map": "生成 NDVI 恢复时序地图",
         "generating_ndvi_map": "正在生成植被恢复时序地图（需在云端提取连续多期影像，请耐心等待 1-2 分钟）...",
+        "generating_ndvi_single": "正在从 GEE 生成火后第 {month} 月 NDVI 图层...",
         "ndvi_layer": "火后第 {month} 月烧伤区 NDVI ({start} ~ {end})",
         "ndvi_no_layers": "所选关键月份内没有可用于绘制 NDVI 地图的影像。",
         "ndvi_legend": "#### NDVI 植被健康度图例",
@@ -123,6 +125,7 @@ TRANSLATIONS = {
         "ndvi_medium": "中密度植被 (0.4 至 0.6)",
         "ndvi_dense": "高密度健康植被 (> 0.6)",
         "ndvi_map_tip": "*提示：在地图右上角切换第 1、3、6、9、12 月图层，观察灾区植被逐渐恢复的过程。*",
+        "fast_map_tip": "单月模式只请求一个 GEE 图层；缩放和拖动地图不会重新运行整个 Streamlit 页面。",
         "ndvi_map_prompt": "点击上方按钮生成 1-12 个月 NDVI 植被恢复时序交互地图。",
         "ndvi_chart_subheader": "NDVI 12 个月时序恢复轨迹模型",
         "run_ndvi_chart": "启动云计算生态韧性模型",
@@ -140,16 +143,11 @@ TRANSLATIONS = {
     "en": {
         "title": "Wildfire Remote Sensing and Ecological Recovery Dashboard",
         "author": "**Author:** Linghan Qi | Powered by NASA FIRMS and Google Earth Engine",
-        "google_login_title": "Google Account Sign-In",
-        "google_login_help": "Sign in with Google first. The login identifies the visitor only; Earth Engine computations still use the server-side service account.",
-        "google_login_button": "Sign in with Google",
-        "google_logout_button": "Sign out of Google",
-        "google_signed_in": "Signed in: {user}",
-        "google_auth_not_configured": "Google sign-in is not configured. Add the OAuth Client ID, Client Secret, and callback URL under [auth] in Streamlit Secrets.",
         "gee_init_error": "GEE initialization failed: {error}. Configure GEE_SERVICE_ACCOUNT_JSON on Streamlit Cloud.",
         "gee_secret_json_invalid": "GEE_SERVICE_ACCOUNT_JSON is not valid JSON (line {line}, column {column}). Copy the complete downloaded JSON file.",
         "gee_secret_missing_fields": "The GEE service-account JSON is missing required fields: {fields}.",
         "gee_private_key_invalid": "The GEE service-account private_key is invalid. Download a new JSON key and copy it completely without editing it; JSON newlines must use one backslash followed by n.",
+        "gee_map_validation_failed": "Basic GEE computation succeeded, but map-tile creation failed: {error}",
         "firms_key_dialog_title": "Enter NASA FIRMS API Key",
         "firms_key_dialog_help": "Enter your NASA FIRMS MAP_KEY. The app will verify both the FIRMS key and its server-side Google Earth Engine connection before loading the analysis interface.",
         "firms_key_label": "NASA FIRMS MAP_KEY",
@@ -195,10 +193,16 @@ TRANSLATIONS = {
         "dnbr_caption": "Fixed pre-fire baseline: {start} to {end}. Each post-fire layer compares a 30-day median composite with this baseline.",
         "water_mask": "Apply Water Mask (JRC)",
         "burned_only": "Show Burned Area Only (dNBR > 0.1)",
+        "map_mode": "Map Generation Mode",
+        "fast_single_month": "Fast Single-Month Mode (Recommended)",
+        "multi_month_mode": "Multi-Month Comparison (Slower)",
+        "display_month": "Post-Fire Month to Display",
         "months_track": "Post-fire Months",
         "generate_dnbr": "Generate Monthly dNBR Map",
         "generating_dnbr": "Generating {count} monthly dNBR layers from GEE...",
+        "generating_dnbr_single": "Generating the post-fire month {month} dNBR layer from GEE...",
         "month_no_image": "No qualifying Sentinel-2 imagery was found for post-fire month {month}; this month was skipped.",
+        "map_layer_error": "Layer “{layer}” failed to load: {error}",
         "dnbr_layer": "Post-Fire Month {month} dNBR ({start} to {end})",
         "dnbr_no_layers": "No imagery is available for monthly dNBR mapping in the selected period.",
         "dnbr_legend": "#### dNBR Severity / Recovery Legend",
@@ -214,6 +218,7 @@ TRANSLATIONS = {
         "ndvi_map_subheader": "Spatial Vegetation Recovery Within the Burned Area (Months 1-12)",
         "generate_ndvi_map": "Generate NDVI Recovery Maps",
         "generating_ndvi_map": "Generating multi-period vegetation recovery layers from GEE. This may take 1-2 minutes...",
+        "generating_ndvi_single": "Generating the post-fire month {month} NDVI layer from GEE...",
         "ndvi_layer": "Post-Fire Month {month} Burned-Area NDVI ({start} to {end})",
         "ndvi_no_layers": "No imagery is available for NDVI mapping in the selected key months.",
         "ndvi_legend": "#### NDVI Vegetation Health Legend",
@@ -223,6 +228,7 @@ TRANSLATIONS = {
         "ndvi_medium": "Medium-density vegetation (0.4 to 0.6)",
         "ndvi_dense": "Dense healthy vegetation (> 0.6)",
         "ndvi_map_tip": "*Tip: Switch among months 1, 3, 6, 9, and 12 in the layer control to observe vegetation recovery.*",
+        "fast_map_tip": "Single-month mode requests only one GEE layer; zooming and panning the map will not rerun the whole Streamlit page.",
         "ndvi_map_prompt": "Click the button above to generate the 1-12 month NDVI recovery map.",
         "ndvi_chart_subheader": "12-Month NDVI Recovery Trajectory",
         "run_ndvi_chart": "Run Ecological Resilience Analysis",
@@ -302,54 +308,6 @@ def get_secret(name, default=""):
     except (FileNotFoundError, AttributeError):
         # 第一次本地运行可能尚未创建 secrets.toml，此时允许使用默认值。
         return default
-
-
-def require_google_login():
-    """先通过 Google OIDC 确认访问者身份，再运行 FIRMS 与 GEE 验证。"""
-    auth_config = get_secret("auth", {})
-    required_auth_fields = {
-        "redirect_uri",
-        "cookie_secret",
-        "client_id",
-        "client_secret",
-        "server_metadata_url"
-    }
-
-    # 主动检查配置，避免用户点击登录按钮后才看到难以理解的底层异常。
-    if not auth_config or not all(
-        auth_config.get(field) for field in required_auth_fields
-    ):
-        st.error(tr("google_auth_not_configured"))
-        st.stop()
-
-    if not st.user.is_logged_in:
-        st.subheader(tr("google_login_title"))
-        st.info(tr("google_login_help"))
-        if st.button(
-            tr("google_login_button"),
-            type="primary",
-            key="google_login_button"
-        ):
-            st.login()
-        st.stop()
-
-    # 这里只显示姓名或邮箱，不显示 ID token、access token 等敏感内容。
-    user_info = st.user.to_dict()
-    user_label = (
-        user_info.get("email")
-        or user_info.get("name")
-        or "Google user"
-    )
-    st.sidebar.success(tr("google_signed_in", user=user_label))
-    if st.sidebar.button(
-        tr("google_logout_button"),
-        key="google_logout_button"
-    ):
-        st.logout()
-
-
-# 身份验证必须早于 FIRMS 弹窗与 GEE 初始化。未登录时 st.stop() 会停止后续代码。
-require_google_login()
 
 
 gee_project_id = get_secret("GEE_PROJECT_ID", "final-research-lq-gis")
@@ -446,6 +404,19 @@ def initialize_and_validate_gee(project_id, service_account_json, language_code)
     # 因此还能检测项目未注册、API 未启用或服务账号无权限等问题。
     if ee.Number(1).getInfo() != 1:
         raise RuntimeError("Earth Engine returned an unexpected validation result.")
+
+    # dNBR 与 NDVI 页面最终通过 getMapId 创建地图瓦片。单纯 getInfo() 成功
+    # 不能保证服务账号拥有 earthengine.maps.create，因此在进入主界面前预检。
+    try:
+        ee.Image.constant(1).getMapId({"min": 0, "max": 1})
+    except Exception as exc:
+        raise RuntimeError(
+            tr_for(
+                language_code,
+                "gee_map_validation_failed",
+                error=exc
+            )
+        ) from exc
 
     return True
 
@@ -834,15 +805,17 @@ if gee_ready:
         post_fire_img.select('NBR')
     ).rename('dNBR')
     
-    # LSIB 用于裁掉海洋；JRC max_extent=0 表示该像元未被记录为历史水体。
-    land_boundaries = ee.FeatureCollection("USDOS/LSIB_SIMPLE/2017")
+    # JRC max_extent=0 表示该像元未被记录为历史水体。所有合成影像已经裁剪
+    # 到 roi，因此无需再把全球国家边界 FeatureCollection 加入每个地图表达式。
     inland_water_mask = ee.Image("JRC/GSW1_4/GlobalSurfaceWater").select('max_extent').eq(0)
     
     def classify_dnbr(dnbr_image):
         """按照 USGS/FIREMON 阈值将连续 dNBR 重分类为 1-7 级。"""
         # where() 按顺序把每个连续 dNBR 像元赋为离散类别：
         # 1-2=恢复信号，3=无显著变化，4-7=低到高烧伤严重度。
-        return (ee.Image(0)
+        # 从 dNBR 自身创建零值底图，继承 Sentinel-2 的投影、空间范围和掩膜；
+        # ee.Image(0) 使用默认全球投影，生成在线瓦片时可能造成不必要的重投影。
+        return (dnbr_image.multiply(0).toUint8()
             .where(dnbr_image.lt(-0.25), 1)
             .where(dnbr_image.gte(-0.25).And(dnbr_image.lt(-0.1)), 2)
             .where(dnbr_image.gte(-0.1).And(dnbr_image.lt(0.1)), 3)
@@ -855,7 +828,7 @@ if gee_ready:
 
     # 先保留连续 dNBR，再从连续值创建 dNBR > 0.1 的固定火烧迹地掩膜。
     # 原代码使用分类图像 .gt(4)，会错误排除第 4 类（0.1-0.27）的低度烧伤。
-    dnbr_land = dnbr.clipToCollection(land_boundaries)
+    dnbr_land = dnbr.clip(roi)
     dnbr_clean = dnbr_land.updateMask(inland_water_mask)
     # 分类影像只用于颜色显示；固定烧伤掩膜必须从连续 dNBR 创建，
     # 不能把 1-7 分类编号误当作真实 dNBR 数值。
@@ -889,6 +862,18 @@ if gee_ready:
             )
         )
 
+        # 默认只请求一个月份的 GEE 图层。与一次创建 12 个 Map ID 相比，
+        # 这会显著缩短首次出图时间；需要逐月对比时仍可切换到多月模式。
+        dnbr_mode = st.radio(
+            tr("map_mode"),
+            options=["single", "multi"],
+            format_func=lambda mode: tr(
+                "fast_single_month" if mode == "single" else "multi_month_mode"
+            ),
+            horizontal=True,
+            key="dnbr_map_mode"
+        )
+
         # 交互开关控制（前端 UI 控制后台逻辑）
         col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1, 1, 1])
         use_water_mask = col_ctrl1.checkbox(
@@ -901,13 +886,31 @@ if gee_ready:
             value=True,
             key="show_burned_only"
         )
-        months_to_track = col_ctrl3.slider(
-            tr("months_track"),
-            1,
-            12,
-            12,
-            key="months_to_track"
-        )
+        if dnbr_mode == "single":
+            selected_dnbr_month = col_ctrl3.slider(
+                tr("display_month"),
+                1,
+                12,
+                1,
+                key="dnbr_display_month"
+            )
+            dnbr_month_indices = [selected_dnbr_month - 1]
+            dnbr_spinner_text = tr(
+                "generating_dnbr_single",
+                month=selected_dnbr_month
+            )
+        else:
+            months_to_track = col_ctrl3.slider(
+                tr("months_track"),
+                1,
+                12,
+                5,
+                key="months_to_track"
+            )
+            dnbr_month_indices = range(months_to_track)
+            dnbr_spinner_text = tr("generating_dnbr", count=months_to_track)
+
+        st.caption(tr("fast_map_tip"))
 
         if "show_dnbr_map" not in st.session_state:
             st.session_state.show_dnbr_map = False
@@ -916,7 +919,7 @@ if gee_ready:
             st.session_state.show_dnbr_map = True
 
         if st.session_state.show_dnbr_map:
-            with st.spinner(tr("generating_dnbr", count=months_to_track)):
+            with st.spinner(dnbr_spinner_text):
                 coords = [float(x) for x in bbox_input.split(',')]
                 center_lat = (coords[1] + coords[3]) / 2
                 center_lon = (coords[0] + coords[2]) / 2
@@ -930,7 +933,7 @@ if gee_ready:
                     fixed_burned_mask = fixed_burned_mask.updateMask(inland_water_mask)
 
                 loaded_dnbr_layers = 0
-                for i in range(months_to_track):
+                for i in dnbr_month_indices:
                     # 第 1 月：火灭次日起第 1-30 天；第 2 月：第 31-60 天，以此类推。
                     period_start_dt = end_date + timedelta(days=1 + i * offset_days)
                     # 结束日期专门多加 30 天，因为 filterDate 不包含结束日。
@@ -955,7 +958,7 @@ if gee_ready:
                     monthly_dnbr = (pre_fire_img.select('NBR')
                         .subtract(recovery_img.select('NBR'))
                         .rename('dNBR'))
-                    monthly_dnbr = monthly_dnbr.clipToCollection(land_boundaries)
+                    monthly_dnbr = monthly_dnbr.clip(roi)
 
                     if use_water_mask:
                         monthly_dnbr = monthly_dnbr.updateMask(inland_water_mask)
@@ -971,13 +974,25 @@ if gee_ready:
                         start=period_start_dt.strftime('%Y-%m-%d'),
                         end=period_end_inclusive_dt.strftime('%Y-%m-%d')
                     )
-                    m_dnbr.add_ee_layer(
-                        classified_monthly,
-                        vis_dnbr,
-                        layer_name,
-                        # 若第 1 月为空，则让后面第一个有效月份默认显示。
-                        show=(loaded_dnbr_layers == 0)
-                    )
+                    try:
+                        m_dnbr.add_ee_layer(
+                            classified_monthly,
+                            vis_dnbr,
+                            layer_name,
+                            # 若第 1 月为空，则让后面第一个有效月份默认显示。
+                            show=(loaded_dnbr_layers == 0)
+                        )
+                    except Exception as exc:
+                        # 捕获后 Streamlit 不会把整个页面替换成红色调用栈，同时
+                        # 用户仍能看到 GEE 返回的权限、数据或计算复杂度原因。
+                        st.warning(
+                            tr(
+                                "map_layer_error",
+                                layer=layer_name,
+                                error=exc
+                            )
+                        )
+                        continue
                     loaded_dnbr_layers += 1
 
                 if loaded_dnbr_layers:
@@ -986,7 +1001,14 @@ if gee_ready:
                         m_dnbr,
                         use_container_width=True,
                         height=600,
-                        key="monthly_dnbr_map"
+                        # 不向 Python 返回缩放、中心点等交互状态。这样拖动或
+                        # 缩放地图只发生在浏览器端，不会触发 Streamlit 整页重跑。
+                        returned_objects=[],
+                        key=(
+                            f"monthly_dnbr_map_{dnbr_mode}_"
+                            f"{list(dnbr_month_indices)[-1] + 1}_"
+                            f"{use_water_mask}_{show_burned_only}"
+                        )
                     )
                 else:
                     st.error(tr("dnbr_no_layers"))
@@ -1006,12 +1028,44 @@ if gee_ready:
                             unsafe_allow_html=True
                         )
 
-                st.info(tr("dnbr_tip"))
+                if dnbr_mode == "multi":
+                    st.info(tr("dnbr_tip"))
         else:
             st.info(tr("dnbr_prompt"))
 
     with tab3:
         st.subheader(tr("ndvi_map_subheader"))
+
+        # NDVI 地图同样默认只创建一个月份的 GEE Map ID。多月模式保留
+        # 1、3、6、9、12 月五个关键节点，适合需要空间对比时使用。
+        ndvi_mode = st.radio(
+            tr("map_mode"),
+            options=["single", "multi"],
+            format_func=lambda mode: tr(
+                "fast_single_month" if mode == "single" else "multi_month_mode"
+            ),
+            horizontal=True,
+            key="ndvi_map_mode"
+        )
+        if ndvi_mode == "single":
+            selected_ndvi_month = st.slider(
+                tr("display_month"),
+                1,
+                12,
+                1,
+                key="ndvi_display_month"
+            )
+            target_months = [selected_ndvi_month]
+            ndvi_spinner_text = tr(
+                "generating_ndvi_single",
+                month=selected_ndvi_month
+            )
+        else:
+            target_months = [1, 3, 6, 9, 12]
+            ndvi_spinner_text = tr("generating_ndvi_map")
+
+        st.caption(tr("fast_map_tip"))
+
         if "show_ndvi_map" not in st.session_state:
             st.session_state.show_ndvi_map = False
 
@@ -1019,7 +1073,7 @@ if gee_ready:
             st.session_state.show_ndvi_map = True
 
         if st.session_state.show_ndvi_map:
-            with st.spinner(tr("generating_ndvi_map")):
+            with st.spinner(ndvi_spinner_text):
                 coords = [float(x) for x in bbox_input.split(',')]
                 center_lat = (coords[1] + coords[3]) / 2
                 center_lon = (coords[0] + coords[2]) / 2
@@ -1027,8 +1081,7 @@ if gee_ready:
                 # 创建纯净版 Folium 底图
                 m_ndvi = folium.Map(location=[center_lat, center_lon], zoom_start=10)
                 
-                # 遍历设定的月份并添加到地图
-                target_months = [1, 3, 6, 9, 12]
+                # 遍历当前模式需要的月份并添加到地图。
                 loaded_ndvi_layers = 0
                 for m in target_months:
                     # 与 dNBR 页面保持同一时间定义：第 1 月从火灭次日开始，
@@ -1052,7 +1105,10 @@ if gee_ready:
                     # 计算 NDVI 并掩膜（保留火烧迹地区域且排除水体）
                     # burned_mask 来自首个火后窗口，因此所有 NDVI 月份使用
                     # 完全相同的空间范围，避免区域变化影响月份间比较。
-                    clean_ndvi = get_ndvi(monthly_img).clipToCollection(land_boundaries).updateMask(inland_water_mask).updateMask(burned_mask)
+                    clean_ndvi = (get_ndvi(monthly_img)
+                        .clip(roi)
+                        .updateMask(inland_water_mask)
+                        .updateMask(burned_mask))
                     
                     # 仅默认显示第一个月的图层，其余月份默认折叠，防止色彩混叠
                     is_shown = loaded_ndvi_layers == 0
@@ -1064,12 +1120,22 @@ if gee_ready:
                         start=s_str,
                         end=display_end_str
                     )
-                    m_ndvi.add_ee_layer(
-                        clean_ndvi,
-                        vis_ndvi,
-                        layer_name,
-                        show=is_shown
-                    )
+                    try:
+                        m_ndvi.add_ee_layer(
+                            clean_ndvi,
+                            vis_ndvi,
+                            layer_name,
+                            show=is_shown
+                        )
+                    except Exception as exc:
+                        st.warning(
+                            tr(
+                                "map_layer_error",
+                                layer=layer_name,
+                                error=exc
+                            )
+                        )
+                        continue
                     loaded_ndvi_layers += 1
                 
                 # 添加图层切换控制器
@@ -1079,7 +1145,13 @@ if gee_ready:
                         m_ndvi,
                         use_container_width=True,
                         height=600,
-                        key="monthly_ndvi_map"
+                        # 禁止把地图交互事件返回给 Python，避免用户每次缩放或
+                        # 拖动地图时重新执行所有 GEE 影像准备代码。
+                        returned_objects=[],
+                        key=(
+                            f"monthly_ndvi_map_{ndvi_mode}_"
+                            f"{'-'.join(str(month) for month in target_months)}"
+                        )
                     )
                 else:
                     st.error(tr("ndvi_no_layers"))
@@ -1100,7 +1172,8 @@ if gee_ready:
                         st.markdown(f"<div style='background-color: #{color}; height: 15px; border-radius: 3px; margin-bottom: 5px;'></div>", unsafe_allow_html=True)
                         st.markdown(f"<span style='font-size: 11px; line-height: 1.1; display: block;'>{label}</span>", unsafe_allow_html=True)
                 
-                st.markdown(tr("ndvi_map_tip"))
+                if ndvi_mode == "multi":
+                    st.markdown(tr("ndvi_map_tip"))
 
         else:
             st.info(tr("ndvi_map_prompt"))
